@@ -1,5 +1,6 @@
 package com.example.apilog.aspect;
 
+import com.example.apilog.annotation.ApiDescription;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.commons.lang3.StringUtils;
@@ -10,6 +11,7 @@ import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -52,23 +54,27 @@ public class ApiLogAspect {
                     return result;
                 }
                 log.info("返回结果：" + result);
-                // 获取request，可以在
+                // 获取request，可以在其中获取session、requestUrl等信息
                 HttpServletRequest request = attributes.getRequest();
-                log.info("client ip ===> " + this.getRealIp(request));
-                log.info("server ip ===> " + InetAddress.getLocalHost().getHostAddress());
-                log.info("请求的方法类型 ===> " + request.getMethod());
-                log.info("请求的url ===> " + request.getRequestURL().toString());
-
+                log.info("client ip：" + this.getRealIp(request));
+                log.info("server ip：" + InetAddress.getLocalHost().getHostAddress());
+                log.info("请求的方法类型：" + request.getMethod());
+                log.info("请求的url：" + request.getRequestURL().toString());
 
                 // 从切面连接点处通过反射机制获取连接点处的方法(Method对象中包括方法名称、描述符、参数、返回类型和异常等信息)
                 Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
+                // method.getAnnotation(ApiDescription.class) ==> 返回null
+                ApiDescription apiDescription = AnnotatedElementUtils.findMergedAnnotation(method, ApiDescription.class);
+                if (apiDescription != null) {
+                    log.info("接口描述：" + apiDescription.value());
+                }
                 log.info("连接点的方法：" + method);
-                log.info("连接点方法的名称：" + method.getName());
                 // 使用new GsonBuilder().serializeNulls().create()生成的Gson对象会保留被转换对象中的null值
                 Gson gson = new GsonBuilder().serializeNulls().create();
                 log.info("连接点方法的参数：" + gson.toJson(this.getParameter(joinPoint)));
-                log.info("方法执行耗费时长 ===> " + (int) (endTime - startTime));
-                log.info("方法执行的开始时间 ===>" + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")).format(startTime));
+                log.info("方法执行的开始时间：" + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")).format(startTime));
+                log.info("方法执行的结束时间：" + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")).format(endTime));
+                log.info("方法执行耗费时长：" + (int) (endTime - startTime));
             } catch (Exception e) {
                 log.error("api log aspect occurred exception: ", e);
             }
@@ -97,7 +103,6 @@ public class ApiLogAspect {
         for (int i = 0; i < parameters.length; i++) {
             // 创建一个map对象存储参数名和参数值
             Map<String, Object> map = new HashMap<>();
-            log.info("key: " + parameters[i].getName() + " , value: " + args[i]);
             map.put(parameters[i].getName(), args[i]);
             argList.add(map);
         }
