@@ -1,6 +1,9 @@
 package com.example.apilog.aspect;
 
+import com.alibaba.fastjson.JSON;
 import com.example.apilog.annotation.ApiDescription;
+import com.example.apilog.po.ApiLogPO;
+import com.example.apilog.repository.ApiLogMapper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.commons.lang3.StringUtils;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -34,6 +38,9 @@ public class ApiLogAspect {
     private static final Logger log = LoggerFactory.getLogger(ApiLogAspect.class);
     private ThreadLocal<Integer> serial = ThreadLocal.withInitial(() -> 0);
 
+    @Resource
+    private ApiLogMapper apiLogMapper;
+
     // 定义切点以及切点表达式，用来匹配指定的方法，更多用法请参考：https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-pointcuts
     @Pointcut("execution(* com..resource..*(..))")
     public void logPointcut() {
@@ -46,6 +53,8 @@ public class ApiLogAspect {
         Object result = joinPoint.proceed();
         long endTime = System.currentTimeMillis();
         this.serial.set((Integer) this.serial.get() - 1);
+        // 使用new GsonBuilder().serializeNulls().create()生成的Gson对象会保留被转换对象中的null值
+        Gson gson = new GsonBuilder().serializeNulls().create();
         if ((Integer) this.serial.get() == 0) {
             try {
                 // 接收到请求，获取请求信息(包含request、response、session等信息)
@@ -53,28 +62,34 @@ public class ApiLogAspect {
                 if (attributes == null) {
                     return result;
                 }
-                log.info("返回结果：" + result);
+                ApiLogPO apiLogPO = new ApiLogPO();
+                if (result != null) {
+                    apiLogPO.setResult(JSON.parseObject(gson.toJson(result)).getString("retCode"));
+                }
                 // 获取request，可以在其中获取session、requestUrl等信息
                 HttpServletRequest request = attributes.getRequest();
-                log.info("client ip：" + this.getRealIp(request));
-                log.info("server ip：" + InetAddress.getLocalHost().getHostAddress());
-                log.info("请求的方法类型：" + request.getMethod());
-                log.info("请求的url：" + request.getRequestURL().toString());
+                apiLogPO.setClientIp(this.getRealIp(request));
+                apiLogPO.setServerIp(InetAddress.getLocalHost().getHostAddress());
+                apiLogPO.setMethod(request.getMethod());
+                apiLogPO.setRequestUrl(request.getRequestURL().toString());
+                apiLogPO.setUserId(request.getHeader("userId"));
+                apiLogPO.setTid(String.valueOf(request.getAttribute("tid")));
 
                 // 从切面连接点处通过反射机制获取连接点处的方法(Method对象中包括方法名称、描述符、参数、返回类型和异常等信息)
                 Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
                 // method.getAnnotation(ApiDescription.class) ==> 返回null
                 ApiDescription apiDescription = AnnotatedElementUtils.findMergedAnnotation(method, ApiDescription.class);
                 if (apiDescription != null) {
-                    log.info("接口描述：" + apiDescription.value());
+                    apiLogPO.setUrlDesc(apiDescription.value());
                 }
-                log.info("连接点的方法：" + method);
-                // 使用new GsonBuilder().serializeNulls().create()生成的Gson对象会保留被转换对象中的null值
-                Gson gson = new GsonBuilder().serializeNulls().create();
-                log.info("连接点方法的参数：" + gson.toJson(this.getParameter(joinPoint)));
-                log.info("方法执行的开始时间：" + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")).format(startTime));
-                log.info("方法执行的结束时间：" + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")).format(endTime));
-                log.info("方法执行耗费时长：" + (int) (endTime - startTime));
+//                log.info("连接点的方法：" + method);
+//                log.info("连接点方法的参数：" + gson.toJson(this.getParameter(joinPoint)));
+                apiLogPO.setStartTime((new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")).format(startTime));
+//                log.info("方法执行的结束时间：" + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")).format(endTime));
+                apiLogPO.setCostTime((int) (endTime - startTime));
+                log.info("{}", apiLogPO);
+
+                apiLogMapper.insert(apiLogPO);
             } catch (Exception e) {
                 log.error("api log aspect occurred exception: ", e);
             }

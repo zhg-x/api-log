@@ -1,5 +1,6 @@
 package com.example.apilog.resource.impl;
 
+import com.example.apilog.dto.DTO;
 import com.example.apilog.resource.ApiLogTestResource;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -11,13 +12,19 @@ public class ApiLogTestResourceImpl implements ApiLogTestResource {
 
 
     @Override
-    public String apiLogTest(String param1, String param2) {
-        return "正在调用的方法" + this.getClass().getPackage().getName() + " " + Thread.currentThread() .getStackTrace()[1].getMethodName();
+    public DTO apiLogTest(String param1, String param2) {
+        DTO dto = new DTO();
+        dto.setRetCode("000000");
+        dto.setRetMsg("成功");
+        return dto;
     }
 
     @Override
-    public String apiLogPostTest(Map<String, Object> map) {
-        return "正在调用的方法" + this.getClass().getPackage().getName() + " " + Thread.currentThread() .getStackTrace()[1].getMethodName();
+    public DTO apiLogPostTest(Map<String, Object> map) {
+        DTO dto = new DTO();
+        dto.setRetCode("999999");
+        dto.setRetMsg("操作失败");
+        return dto;
     }
 
 }
